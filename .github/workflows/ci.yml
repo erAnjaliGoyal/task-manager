@@ -65,10 +65,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+          
       - name: Build backend Docker image
-        run: docker build -t ghcr.io/eranjaligoyal/task-manager-backend:${{ github.sha }} ./backend
+        run: |
+          docker build \
+            -t ghcr.io/eranjaligoyal/task-manager-backend:${{ github.sha }} \
+            -t ghcr.io/eranjaligoyal/task-manager-backend:latest \
+            ./backend
 
       - name: Push backend Docker image
-        run: docker push ghcr.io/eranjaligoyal/task-manager-backend:${{ github.sha }} 
+        run: |
+          docker push ghcr.io/eranjaligoyal/task-manager-backend:${{ github.sha }}
+          docker push ghcr.io/eranjaligoyal/task-manager-backend:latest
 
+  deploy-backend:
+    needs: docker-backend
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      -name: Trigger Render backend deploy
+      run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
