@@ -34,6 +34,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    
+    env:
+      DATABASE_URL: postgresql://task_user:task_password@postgres:5432/task_db
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
