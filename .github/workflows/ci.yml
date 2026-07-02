@@ -24,6 +24,9 @@ jobs:
         
       - name: Install frontend dependencies
         run: npm ci
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
       
       - name: Build frontend
         run: npm run build
@@ -34,6 +37,9 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    
+    env:
+      DATABASE_URL: postgresql://task_user:task_password@postgres:5432/task_db
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,6 +51,15 @@ jobs:
 
       - name: Install backend dependencies
         run: pip install -r requirements.txt
+
+      - name: Install backend audit tool
+        run: pip install pip-audit
+
+      - name: Audit backend dependencies
+        run: pip-audit -r requirements.txt
+
+      - name: Run backend tests
+        run: pytest
   
   docker-backend:
     needs: backend
@@ -72,6 +87,22 @@ jobs:
             -t ghcr.io/eranjaligoyal/task-manager-backend:${{ github.sha }} \
             -t ghcr.io/eranjaligoyal/task-manager-backend:latest \
             ./backend
+      
+      - name: Scan backend Docker image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/eranjaligoyal/task-manager-backend:${{ github.sha }}
+          severity: CRITICAL, HIGH
+          exit-code: "1"
+      
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=high
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+      
+      - name: Audit backend dependencies
+        run: pip-audit -r requirements.txt
 
       - name: Push backend Docker image
         run: |
@@ -86,3 +117,27 @@ jobs:
     steps:
       - name: Trigger Render backend deploy
         run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+
+  smoke-test-backend:
+    needs: deploy-backend
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Wait for Deployment
+        run: sleep 60
+
+      - name: Check backend health
+        run: curl --fail https://task-manager-qpec.onrender.com/health
+      
+      - name: Check backend health
+        run: |
+          for i in {1..10}; do
+            if curl --fail https://task-manager-qpec.onrender.com/health; then
+              exit 0
+            fi
+            echo "Backend not ready yet. Retrying..."
+            sleep 15
+          done
+          exit 1
