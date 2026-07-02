@@ -86,3 +86,27 @@ jobs:
     steps:
       - name: Trigger Render backend deploy
         run: curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+
+  smoke-test-backend:
+    needs: deploy-backend
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Wait for Deployment
+        run: sleep 60
+
+      - name: Check backend health
+        run: curl --fail https://task-manager-qpec.onrender.com/health
+      
+      - name: Check backend health
+        run: |
+          for i in {1..10}; do
+            if curl --fail https://task-manager-qpec.onrender.com/health; then
+              exit 0
+            fi
+            echo "Backend not ready yet. Retrying..."
+            sleep 15
+          done
+          exit 1
